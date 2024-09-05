@@ -7,6 +7,7 @@ from datetime import datetime
 
 from PIL import ImageTk, Image
 import tkinter as tk
+from tkinter import ttk
 from tkinter.filedialog import askdirectory
 from tkinter.filedialog import askopenfilenames
 from tkinter.filedialog import asksaveasfilename
@@ -50,6 +51,7 @@ class AskYesNoCheck(Dialog):
 
 
 
+
 def set_text(text, entry):
     entry.delete(0, tk.END)
     entry.insert(0, text)
@@ -81,16 +83,20 @@ def toggle_multiple_entry():
     else:
         multiple_entry.configure(state="normal")
 
+
 def generate_and_save_single_image(means_array, gaussian_mean, gaussian_std_deviation, path):
     saturation_value = int(saturation_entry.get())
+    number_of_photons_to_trigger_event = int(event_trigger_entry.get())
     poisson_array = np.random.poisson(means_array)
     gaussian_noise = np.random.normal(gaussian_mean, gaussian_std_deviation, np.shape(means_array))
 
     noisy_array = poisson_array + gaussian_noise
     noisy_array[noisy_array < 0] = 0
+    noisy_array = noisy_array//number_of_photons_to_trigger_event
     noisy_array[noisy_array > saturation_value] = saturation_value
     im = Image.fromarray(np.uint8(noisy_array))
     im.save(path)
+
 
 def generate():
 
@@ -119,6 +125,23 @@ def generate():
     overwrite_file = False
     ask_for_permission = True
 
+
+    multiple_images_box_checked = (multiple_var.get() == 1)
+    if not multiple_images_box_checked:
+        N = 1
+    else:
+        try:
+            N = int(multiple_entry.get())
+        except:
+            N = -1
+        if N <= 0:
+            tk.messagebox.showwarning(title="Warning", message="Please enter a valid number of images")
+            return
+        if N*number_of_images > 9999:
+            res = tk.messagebox.askquestion("Large number of images", "You are about to generate {} images, do you want to proceed ?".format(N*number_of_images))
+            if (res=='no'):
+                return
+
     for i in range(number_of_images):
         
         image_path = image_listbox.get(i)
@@ -132,29 +155,13 @@ def generate():
         image_filename, image_file_extension = os.path.splitext(image_path)
         only_filename = os.path.basename(image_filename).split('/')[-1]
 
-        multiple_images_box_checked = (multiple_var.get() == 1)
-            
-        if not multiple_images_box_checked:
-            N = 1
-        else:
-            try:
-                N = int(multiple_entry.get())
-            except:
-                N = -1
-            if N <= 0:
-                tk.messagebox.showwarning(title="Warning", message="Please enter a valid number of images")
-                return
-            if N > 9999:
-                tk.messagebox.showwarning(title="Warning", message="The image number is capped at 9999")
-                return
-            
         number_of_digits = len(str(N))
 
-        for i in range(1, N+1):
+        for j in range(1, N+1):
             if not multiple_images_box_checked:
                 save_path = save_folder_path + '/' + only_filename + '_noisified' + image_file_extension
             else:
-                save_path = save_folder_path + '/' + only_filename + '_noisified' + '_' + '0'*(number_of_digits - len(str(i))) + str(i) + image_file_extension
+                save_path = save_folder_path + '/' + only_filename + '_noisified' + '_' + '0'*(number_of_digits - len(str(j))) + str(j) + image_file_extension
 
             if os.path.isfile(save_path) and ask_for_permission:
                 dlg = AskYesNoCheck(root, title="File already exists", message = 'File "{}" already exists, do you want to overwrite it ?'.format(save_path))
@@ -165,8 +172,13 @@ def generate():
             if not os.path.isfile(save_path) or overwrite_file:
                 generate_and_save_single_image(means_array, gaussian_mean, gaussian_std_deviation, save_path)
                 number_of_saved_images += 1
+
+            progress.set(1000*(i*N + j)/(number_of_images*N))
+            root.update_idletasks()
             
     tk.messagebox.showinfo(title="", message="Saved {} image{} in folder {}".format(number_of_saved_images, 's'*(not number_of_saved_images==1), save_folder_path))
+    progress.set(0)
+
 
 def export():
     output_path = save_entry.get()
@@ -174,6 +186,7 @@ def export():
     gaussian_mean = float(gaussian_mean_entry.get())
     gaussian_std_deviation = float(gaussian_std_entry.get())
     saturation = int(saturation_entry.get())
+    number_of_photons_to_trigger_event = int(event_trigger_entry.get())
 
     now = datetime.now()
     dt_string = now.strftime("%Y/%m/%d %H:%M:%S")
@@ -193,6 +206,8 @@ def export():
         f.write("Gaussian standard deviation: " + str(gaussian_std_deviation))
         f.write("\n")
         f.write("Saturation: " + str(saturation))
+        f.write("\n")
+        f.write("Number of photons to trigger event: " + str(number_of_photons_to_trigger_event))
         f.close()
         
 
@@ -263,39 +278,57 @@ saturation_slider = tk.Scale(root, from_ = 1, to = 255, digits = 0, resolution =
 saturation_slider.grid(row = 10, column = 1, columnspan = 2, padx = 4, pady = 2, sticky=tk.EW)
 saturation_slider.set(255)
 
+# Number of photons to trigger event selector
+event_trigger_label = tk.Label(root, text="Number of photons to trigger event: ")
+event_trigger_label.grid(row = 11, column = 0, columnspan = 3, pady = 2)
+
+event_trigger_entry = tk.Entry(root)
+event_trigger_entry.insert(0, '1')
+event_trigger_entry.grid(row = 12, column = 0, padx = 4, pady = 2)
+
+event_trigger_slider = tk.Scale(root, from_ = 1, to = 100, digits = 0, resolution = 1, showvalue = False, orient = tk.HORIZONTAL, command=lambda value:slider_callback(value, event_trigger_entry))
+event_trigger_slider.grid(row = 12, column = 1, columnspan = 2, padx = 4, pady = 2, sticky=tk.EW)
+event_trigger_slider.set(1)
+
 # Save as selector
 save_label = tk.Label(root, text="Select folder to save generated images:")
-save_label.grid(row = 11, column = 0, columnspan = 3, pady = 2)
+save_label.grid(row = 13, column = 0, columnspan = 3, pady = 2)
 
 save_entry = tk.Entry(root)
-save_entry.grid(row = 12, column = 0, columnspan = 2, padx = 4, pady = 2, sticky=tk.EW)
+save_entry.grid(row = 14, column = 0, columnspan = 2, padx = 4, pady = 2, sticky=tk.EW)
 
 save_button = tk.Button(root, text = "browse", command = lambda:set_output_folder_path("Save as", save_entry))
-save_button.grid(row = 12, column = 2, padx = 4, pady = 2, sticky=tk.W)
+save_button.grid(row = 14, column = 2, padx = 4, pady = 2, sticky=tk.W)
 
 
 # Multiple images option
 multiple_label = tk.Label(root, text="Generate multiple images")
-multiple_label.grid(row = 13, column = 0, columnspan = 3, pady = 2)
+multiple_label.grid(row = 15, column = 0, columnspan = 3, pady = 2)
 
 multiple_var = tk.IntVar()
 multiple_checkbox = tk.Checkbutton(root, variable = multiple_var, command = toggle_multiple_entry)
-multiple_checkbox.grid(row = 14, column = 0, padx = 4, pady = 2, sticky = tk.E)
+multiple_checkbox.grid(row = 16, column = 0, padx = 4, pady = 2, sticky = tk.E)
 
 multiple_info_label = tk.Label(root, text = "Number of images:")
-multiple_info_label.grid(row = 14, column = 1, padx = 4, pady = 2)
+multiple_info_label.grid(row = 16, column = 1, padx = 4, pady = 2)
 
 multiple_entry = tk.Entry(root)
-multiple_entry.grid(row = 14, column = 2, padx = 4, pady = 2)
+multiple_entry.grid(row = 16, column = 2, padx = 4, pady = 2)
 multiple_entry.configure(state="disabled", disabledbackground="light gray")
 
 # Generate
 generate_button = tk.Button(root, text = "Generate", command = generate)
-generate_button.grid(row = 15, column = 0, rowspan = 1, columnspan = 2, padx = 10, pady = 10, sticky = tk.NSEW)
+generate_button.grid(row = 17, column = 0, rowspan = 1, columnspan = 2, padx = 10, pady = 10, sticky = tk.NSEW)
 
 # Export parameters
 export_button = tk.Button(root, text = "Export parameters", command = export)
-export_button.grid(row = 15, column = 2, rowspan = 1, padx = 10, pady = 10, sticky = tk.NSEW)
-root.rowconfigure(15, minsize = 64)
+export_button.grid(row = 17, column = 2, rowspan = 1, padx = 10, pady = 10, sticky = tk.NSEW)
+root.rowconfigure(17, minsize = 64)
+
+# Progressbar
+progress = tk.IntVar()
+progressbar = ttk.Progressbar(root, variable = progress, maximum = 1000)
+progressbar.grid(row = 18, column = 0, columnspan = 3, padx = 10, pady = 10, sticky = tk.EW)
+
 
 root.mainloop()

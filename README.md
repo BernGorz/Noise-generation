@@ -20,6 +20,7 @@ You can vary the following parameters:
 - Gaussian noise mean
 - Gaussian noise standard deviation
 - Saturation threshold: If any pixel has more events than the threshold value, if will automatically get set to the threshold value. Side note: if any pixel has a value < 0 due to the gaussian distribution, its value will be set to 0.
+- Number of photons to trigger event: By default, 1 value of a pixel corresponds to 1 photon. By varying this parameter, your vary your camera's sensitivity to single photons. For instance, with "Number of photons to trigger event = 5", a pixel with a value of 120 corresponds to 600 photons that have landed there.
 
 Parameters can be varied beyond what is allowed by the sliders by modifying the values by hand.
 
