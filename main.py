@@ -13,7 +13,6 @@ from tkinter.filedialog import askopenfilenames
 from tkinter.filedialog import asksaveasfilename
 from tkinter.simpledialog import Dialog
 
-
 ################################################################################
 ###### Generate noisy image from an initial distribution #####
 ################################################################################
@@ -23,6 +22,7 @@ from tkinter.simpledialog import Dialog
 
 
 class AskYesNoCheck(Dialog):
+    '''Simple window with a question and a yes/no answer, with option to apply to further conflicts'''
 
     def __init__(self, parent, title = '', message = ''):
         self.message = message
@@ -50,7 +50,7 @@ class AskYesNoCheck(Dialog):
         self.cancel()
 
 
-
+# Simple functions
 
 def set_text(text, entry):
     entry.delete(0, tk.END)
@@ -84,16 +84,20 @@ def toggle_multiple_entry():
         multiple_entry.configure(state="normal")
 
 
+# Image generation
+
 def generate_and_save_single_image(means_array, gaussian_mean, gaussian_std_deviation, path):
+    '''Main mechanism for generating a noisy image'''
+
     saturation_value = int(saturation_entry.get())
     number_of_photons_to_trigger_event = int(event_trigger_entry.get())
-    poisson_array = np.random.poisson(means_array)
-    gaussian_noise = np.random.normal(gaussian_mean, gaussian_std_deviation, np.shape(means_array))
+    poisson_array = np.random.poisson(means_array)//number_of_photons_to_trigger_event              # Generate poisson noise based on initial distribution (divide )
+    gaussian_noise = np.random.normal(gaussian_mean, gaussian_std_deviation, np.shape(means_array)) # Generate gaussian noise from iid distributions
+
 
     noisy_array = poisson_array + gaussian_noise
-    noisy_array[noisy_array < 0] = 0
-    noisy_array = noisy_array//number_of_photons_to_trigger_event
-    noisy_array[noisy_array > saturation_value] = saturation_value
+    noisy_array[noisy_array < 0] = 0                                # Supress neagtive values
+    noisy_array[noisy_array > saturation_value] = saturation_value  # Saturation threshold
     im = Image.fromarray(np.uint8(noisy_array))
     im.save(path)
 
@@ -102,6 +106,7 @@ def generate():
 
     number_of_images = image_listbox.size()
 
+    # Perform basic checks
     if number_of_images == 0:
         tk.messagebox.showwarning(title="Warning", message="Please input images to noisify")
         return
@@ -116,6 +121,7 @@ def generate():
         tk.messagebox.showwarning(title="Warning", message='Folder "{}" does not exist'.format(save_folder_path))
         return
     
+    # Get simulation paramters from input
     poisson_photon_number = int(nbphoton_entry.get())
     gaussian_mean = float(gaussian_mean_entry.get())
     gaussian_std_deviation = float(gaussian_std_entry.get())
@@ -125,7 +131,7 @@ def generate():
     overwrite_file = False
     ask_for_permission = True
 
-
+    # Check how many images will be generated
     multiple_images_box_checked = (multiple_var.get() == 1)
     if not multiple_images_box_checked:
         N = 1
@@ -142,6 +148,7 @@ def generate():
             if (res=='no'):
                 return
 
+    # Run the simulation for every input image
     for i in range(number_of_images):
         
         image_path = image_listbox.get(i)
@@ -149,7 +156,7 @@ def generate():
             tk.messagebox.showwarning(title="Warning", message='File "{}" does not exist. Aborting image generation.'.format(image_path))
             return
         
-        image_array = np.array(Image.open(image_path))
+        image_array = np.array(Image.open(image_path).convert('L'))     # convert('L') converts to a grayscale image, does nothing if it was already monochrome
         means_array = poisson_photon_number*(image_array/np.sum(image_array))
 
         image_filename, image_file_extension = os.path.splitext(image_path)
@@ -157,6 +164,7 @@ def generate():
 
         number_of_digits = len(str(N))
 
+        # Generate as many images as specified by the user
         for j in range(1, N+1):
             if not multiple_images_box_checked:
                 save_path = save_folder_path + '/' + only_filename + '_noisified' + image_file_extension
@@ -166,14 +174,14 @@ def generate():
             if os.path.isfile(save_path) and ask_for_permission:
                 dlg = AskYesNoCheck(root, title="File already exists", message = 'File "{}" already exists, do you want to overwrite it ?'.format(save_path))
                 overwrite_file = dlg.result # yes/no answer
-                if dlg.var.get() == 1: # "Apply answer to all conflicts"
+                if dlg.var.get() == 1: # "Apply answer to all conflicts". Last value for overwrite_file will be remembered
                     ask_for_permission = False
 
             if not os.path.isfile(save_path) or overwrite_file:
                 generate_and_save_single_image(means_array, gaussian_mean, gaussian_std_deviation, save_path)
                 number_of_saved_images += 1
 
-            progress.set(1000*(i*N + j)/(number_of_images*N))
+            progress.set(1000*(i*N + j)/(number_of_images*N))   # Progress bar
             root.update_idletasks()
             
     tk.messagebox.showinfo(title="", message="Saved {} image{} in folder {}".format(number_of_saved_images, 's'*(not number_of_saved_images==1), save_folder_path))
@@ -181,6 +189,7 @@ def generate():
 
 
 def export():
+    '''Save a file with the parameters of your simulation'''
     output_path = save_entry.get()
     poisson_photon_number = int(nbphoton_entry.get())
     gaussian_mean = float(gaussian_mean_entry.get())
@@ -232,7 +241,7 @@ image_clear_button = tk.Button(root, text = "clear", command = lambda:image_list
 image_clear_button.grid(row = 2, column = 2, padx = 4, pady = 2, sticky=tk.W)
 
 # Photon number selector
-nbphoton_label = tk.Label(root, text="Average total number of photons (Poisson noise): ")
+nbphoton_label = tk.Label(root, text="Approximate total number of photons in a picture (Poisson noise): ")
 nbphoton_label.grid(row = 3, column = 0, columnspan = 3, pady = 2)
 
 nbphoton_entry = tk.Entry(root)
