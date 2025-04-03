@@ -9,7 +9,7 @@ from tkinter.filedialog import askopenfilename
 
 max_counts = 15     # Estimated value beyond which there are no events due to thermal noise
 
-
+exposure = 1        # Value that the picture has been artificially multiplied by
 
 
 
@@ -29,6 +29,10 @@ image_color = cv2.imread(path, cv2.IMREAD_COLOR) * int(255 / max_intensity)
 
 
 height, width = np.shape(image)
+
+for i in range(width):
+    for j in range(height):
+        image[i][j] = int(round(image[i][j]/exposure))
 
 x0, y0 = 0, 0
 x1, y1 = width - 1, height - 1
